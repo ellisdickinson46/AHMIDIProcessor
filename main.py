@@ -10,14 +10,16 @@ from helpers.osc import OSCClient
 class AHMIDIProcessor:
     def __init__(self):
         self.hex_message = []
+        self._templates = None  # Placeholder for lazy-loaded templates
+        self._app_config = None  # Placeholder for lazy-loaded app configuration
 
         self.logger = self.setup_logger()
-        self.load_configurations()
         self.validate_configurations()
         self.initialize_communication()
         self.idle_loop()
 
     def idle_loop(self):
+        """Runs an idle loop to keep the program running."""
         try:
             while True:
                 time.sleep(0.05)
@@ -28,19 +30,32 @@ class AHMIDIProcessor:
             self.midi_in.close_port()
 
     def setup_logger(self):
+        """Configures logging for the application."""
         StreamHandler(sys.stdout, level="DEBUG").push_application()
         return Logger("")
 
-    def load_configurations(self):
-        """Loads application and template configurations."""
-        try:
-            self.TEMPLATES = read_json("templates.json", self.logger)
-            self.APP_CONFIG = read_json("app_config.json", self.logger)
-        except Exception:
-            self.logger.error("Error loading configuration files!")
-            sys.exit(1)
+    @property
+    def TEMPLATES(self):
+        """Lazily loads the templates configuration when first accessed."""
+        if self._templates is None:
+            try:
+                self._templates = read_json("templates.json", self.logger)
+            except Exception as e:
+                self.logger.error(f"Error loading templates.json: {e}")
+                sys.exit(1)
+        return self._templates
 
-        self.set_logging_parameters()
+    @property
+    def APP_CONFIG(self):
+        """Lazily loads the application configuration when first accessed."""
+        if self._app_config is None:
+            try:
+                self._app_config = read_json("app_config.json", self.logger)
+                self.set_logging_parameters()
+            except Exception as e:
+                self.logger.error(f"Error loading app_config.json: {e}")
+                sys.exit(1)
+        return self._app_config
 
     def set_logging_parameters(self):
         """Sets application logging parameters from configuration."""
@@ -65,6 +80,7 @@ class AHMIDIProcessor:
         self.midi_in.set_callback(self.midi_callback)
 
     def setup_midi_communication(self):
+        """Sets up MIDI communication based on configuration."""
         midi_options = self.APP_CONFIG.get("midi_options", {})
         return open_communication(
             control_input_name=midi_options.get("control_port_name", ""),
@@ -73,6 +89,7 @@ class AHMIDIProcessor:
         )
 
     def setup_osc_client(self):
+        """Sets up an OSC client using configured targets."""
         osc_client = OSCClient(app_logger=self.logger)
         for target_name, target_options in self.OSC_OPTIONS.get("targets", {}).items():
             osc_client.add_target(target_name, target_options)
@@ -80,9 +97,10 @@ class AHMIDIProcessor:
 
     def midi_callback(self, message, data=None):
         """Callback function that processes an incoming MIDI message."""
-        msg_data, msg_dtime = message
+        msg_data, _ = message
         for item in msg_data:
             self.hex_message.append(to_padded_hex(item))
+
         if self.is_complete_message(self.hex_message):
             self.process_message(self.hex_message)
             self.hex_message = []
@@ -100,7 +118,7 @@ class AHMIDIProcessor:
         dispatch = {
             "0xf0": self.process_sysex_message,
         }
-        
+
         message_type = message[0]
         if message_type in dispatch:
             dispatch[message_type](message)
@@ -117,7 +135,7 @@ class AHMIDIProcessor:
         try:
             message_type = message[0][2]
             length_info = self.TEMPLATES["message_types"].get(message_type, {}).get("length")
-            
+
             if isinstance(length_info, int):
                 return length_info
             return int(self.TEMPLATES["message_types"][message_type]["subtype"].get(message[1][2:], None))
@@ -141,7 +159,7 @@ class AHMIDIProcessor:
             "0x02": self.extract_channel_info,
             "0x14": lambda _: self.logger.info("Received end-of-sync message"),
         }
-        
+
         action = action_map.get(payload[0], self.logger.debug)
         result = action(payload)
         if result:

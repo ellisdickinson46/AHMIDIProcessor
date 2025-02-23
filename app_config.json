@@ -1,0 +1,27 @@
+{
+    "app_options": {
+        "application_name": "AHMIDIProcessor",
+        "log_level": "INFO"
+    },
+    "midi_options": {
+        "control_port_name": "MIDI Control 1",
+        "midi_in_name": "Allen and Heath Processor",
+        "queue_size_limit": 10240
+    },
+    "osc_options": {
+        "listen": {
+            "address": "0.0.0.0",
+            "port": 8080
+        },
+        "targets": {
+            "target_0": {
+                "address": "127.0.0.1",
+                "port": 8000
+            },
+            "target_1": {
+                "address": "127.0.0.1",
+                "port": 8000
+            }
+        }
+    }
+}

@@ -1,4 +1,4 @@
-import time
+import threading
 import sys
 from logbook import Logger, StreamHandler
 from helpers.json_handler import read_json
@@ -12,6 +12,7 @@ class AHMIDIProcessor:
         self.hex_message = []
         self._templates = None  # Placeholder for lazy-loaded templates
         self._app_config = None  # Placeholder for lazy-loaded app configuration
+        self.exit_event = threading.Event()
 
         self.logger = self.setup_logger()
         self.validate_configurations()
@@ -21,10 +22,10 @@ class AHMIDIProcessor:
     def idle_loop(self):
         """Runs an idle loop to keep the program running."""
         try:
-            while True:
-                time.sleep(0.05)
+            self.exit_event.wait()
         except KeyboardInterrupt:
             print("\b\b", end="")
+            self.exit_event.set()
             self.logger.info("Keyboard interrupt received. Exiting...")
         finally:
             self.midi_in.close_port()

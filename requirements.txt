@@ -1,0 +1,3 @@
+Logbook==1.8.0
+python-osc==1.9.3
+python-rtmidi==1.5.8

@@ -1,5 +1,7 @@
 import threading
 import sys
+
+from collections import deque
 from logbook import Logger, StreamHandler
 from helpers.json_handler import read_json
 from helpers.communicator import open_communication
@@ -9,7 +11,7 @@ from helpers.osc import OSCClient
 
 class AHMIDIProcessor:
     def __init__(self):
-        self.hex_message = []
+        self.hex_message = deque(maxlen=128)
         self._templates = None  # Placeholder for lazy-loaded templates
         self._app_config = None  # Placeholder for lazy-loaded app configuration
         self.exit_event = threading.Event()
@@ -100,11 +102,11 @@ class AHMIDIProcessor:
         """Callback function that processes an incoming MIDI message."""
         msg_data, _ = message
         for item in msg_data:
-            self.hex_message.append(to_padded_hex(item))
+            self.hex_message.extend([to_padded_hex(item)])
 
         if self.is_complete_message(self.hex_message):
-            self.process_message(self.hex_message)
-            self.hex_message = []
+            self.process_message(list(self.hex_message))
+            self.hex_message.clear()
 
     def is_complete_message(self, message):
         """Checks if a message has reached its expected length."""

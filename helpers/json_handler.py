@@ -9,12 +9,13 @@ Functions:
         Reads a JSON file and returns its content as a dictionary.
 """
 
+import aiofiles
 from typing import Any, Dict
 import json
 from logbook import Logger
 
 
-def read_json(file_name: str, app_logger: Logger, encoding: str = "utf-8") -> Dict[str, Any]:
+async def read_json(file_name: str, app_logger: Logger, encoding: str = "utf-8") -> Dict[str, Any]:
     """Reads a JSON file and returns its content as a dictionary.
 
     Args:
@@ -31,10 +32,10 @@ def read_json(file_name: str, app_logger: Logger, encoding: str = "utf-8") -> Di
     """
     try:
         app_logger.debug(f"Attempting to read JSON file: '{file_name}'")
-        with open(file_name, "r", encoding=encoding) as json_file:
-            data = json.load(json_file)
+        async with aiofiles.open(file_name, "r", encoding=encoding) as json_file:
+            data = await json_file.read()
             app_logger.debug(f"Successfully loaded JSON file: '{file_name}'")
-            return data
+            return json.loads(data)
     except FileNotFoundError as e:
         app_logger.error(f"JSON file not found: {file_name}")
         raise e

@@ -1,3 +1,4 @@
+import asyncio
 import threading
 import sys
 
@@ -42,7 +43,7 @@ class AHMIDIProcessor:
         """Lazily loads the templates configuration when first accessed."""
         if self._templates is None:
             try:
-                self._templates = read_json("templates.json", self.logger)
+                self._templates = asyncio.run(read_json("templates.json", self.logger))
             except Exception as e:
                 self.logger.error(f"Error loading templates.json: {e}")
                 sys.exit(1)
@@ -53,7 +54,7 @@ class AHMIDIProcessor:
         """Lazily loads the application configuration when first accessed."""
         if self._app_config is None:
             try:
-                self._app_config = read_json("app_config.json", self.logger)
+                self._app_config = asyncio.run(read_json("app_config.json", self.logger))
                 self.set_logging_parameters()
             except Exception as e:
                 self.logger.error(f"Error loading app_config.json: {e}")

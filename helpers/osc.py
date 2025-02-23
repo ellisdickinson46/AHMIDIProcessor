@@ -1,4 +1,4 @@
-import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
 from logbook import Logger
 from pythonosc import udp_client
@@ -15,6 +15,7 @@ class OSCClient:
         """
         self.app_logger = app_logger
         self.targets: Dict[str, udp_client.SimpleUDPClient] = {}
+        self.executor = ThreadPoolExecutor(max_workers=5)  # Limit to 5 concurrent threads
 
     def add_target(self, target_name: str, target_options: Dict[str, Any]):
         """Register a new OSC target with its address and port.
@@ -50,6 +51,7 @@ class OSCClient:
         Raises:
             ValueError: If the OSC path is invalid.
         """
+
         if not isinstance(path, str) or not path.startswith("/"):
             raise ValueError(f"Invalid OSC path: '{path}'. Must be a string starting with '/'.")
 
@@ -61,17 +63,12 @@ class OSCClient:
             """Send message to a specific target."""
             try:
                 client.send_message(path, value)
-                self.app_logger.debug(f"Message sent to '{target_name}' - Path: {path}, Value: {value}")
+                self.app_logger.debug(f"Sent to '{target_name}' - Path: {path}, Value: {value}")
             except Exception as e:
                 self.app_logger.error(f"Error sending to '{target_name}': {e}")
 
-        # Use threading to send messages in parallel
-        threads = [threading.Thread(target=send_message, args=(name, client), daemon=True) 
-                   for name, client in self.targets.items()]
+        futures = [self.executor.submit(send_message, name, client) for name, client in self.targets.items()]
         
-        for thread in threads:
-            thread.start()
-        
-        for thread in threads:
-            thread.join()  # Ensure all messages are sent before returning
+        for future in futures:
+            future.result()  # Ensures all messages are sent before returning
 

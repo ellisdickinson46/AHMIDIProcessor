@@ -1,5 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, Any
 from logbook import Logger
 from pythonosc import udp_client
 
@@ -14,15 +13,15 @@ class OSCClient:
             app_logger (Logger): Logger instance for debugging and error reporting.
         """
         self.app_logger = app_logger
-        self.targets: Dict[str, udp_client.SimpleUDPClient] = {}
+        self.targets: dict[str, udp_client.SimpleUDPClient] = {}
         self.executor = ThreadPoolExecutor(max_workers=5)  # Limit to 5 concurrent threads
 
-    def add_target(self, target_name: str, target_options: Dict[str, Any]):
+    def add_target(self, target_name: str, target_options: dict[str, any]):
         """Register a new OSC target with its address and port.
 
         Args:
             target_name (str): The name identifier of the OSC target.
-            target_options (Dict[str, Any]): A dictionary containing:
+            target_options (dict[str, any]): A dictionary containing:
                 - "address" (str): IP address or hostname of the OSC target.
                 - "port" (int): Port number to send messages to.
 
@@ -41,12 +40,12 @@ class OSCClient:
         self.targets[target_name] = udp_client.SimpleUDPClient(address, port)
         self.app_logger.debug(f"Added OSC target '{target_name}' ({address}:{port}).")
 
-    def send(self, path: str, value: Any = None):
+    def send(self, path: str, value: any = None):
         """Send an OSC message to all registered targets in parallel.
 
         Args:
             path (str): The OSC address pattern (must start with '/').
-            value (Any, optional): The value to send with the message. Defaults to None.
+            value (any, optional): The value to send with the message. Defaults to None.
 
         Raises:
             ValueError: If the OSC path is invalid.
@@ -71,4 +70,3 @@ class OSCClient:
         
         for future in futures:
             future.result()  # Ensures all messages are sent before returning
-

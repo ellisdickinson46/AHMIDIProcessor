@@ -1,29 +1,67 @@
-import asyncio
-import threading
 import sys
+import threading
+import traceback
 
-from collections import deque
+from jinja2 import Template
 from logbook import Logger, StreamHandler
-from helpers.json_handler import read_json
-from helpers.communicator import open_communication
-from helpers.convert import to_padded_hex
+from logbook.more import JinjaFormatter
+from helpers.data import AppConfiguration, MessageTemplates
 from helpers.osc import OSCClient
+from helpers.midi import MIDIInterface, MIDIProcessor
 
 
 class AHMIDIProcessor:
     def __init__(self):
-        self.hex_message = deque(maxlen=128)
-        self._templates = None  # Placeholder for lazy-loaded templates
-        self._app_config = None  # Placeholder for lazy-loaded app configuration
+        self.logger = self.initialize_logger()
+        self.app_config = AppConfiguration(logger=self.logger)
+        self.templates = MessageTemplates(logger=self.logger)
+        self.set_logging_parameters()
+
         self.exit_event = threading.Event()
+        self.midi_ok = self.setup_midi_communications()
+        self.osc_ok = self.setup_osc_client()
+        if self.midi_ok and self.osc_ok:
+            self.logger.info("Initialization complete, entering ready state. Press Control-C to exit")
+            self.keep_alive()
+        else:
+            self.logger.error("Initialization failed, Exiting...")
 
-        self.logger = self.setup_logger()
-        self.validate_configurations()
-        self.initialize_communication()
-        self.idle_loop()
+    def initialize_logger(self) -> Logger:
+        log_template = """[{{ record.time }}] {{ record.level_name.rjust(8) }} [{{ record.channel }}]: {{ record.message }}"""
+        logger = Logger("")
+        handler = StreamHandler(
+            stream=sys.stdout,
+            level="DEBUG"
+        )
+        formatter = JinjaFormatter(log_template)
+        logger.handlers.append(handler)
+        handler.formatter = formatter
+        return logger
 
-    def idle_loop(self):
-        """Runs an idle loop to keep the program running."""
+    def set_logging_parameters(self) -> None:
+        self.logger.name = self.app_config.app_options.get("application_name", "")
+        self.logger.level_name = self.app_config.app_options.get("log_level", "DEBUG")
+
+    def setup_osc_client(self) -> bool:
+        self.osc_client = OSCClient(app_logger=self.logger)
+        targets = self.app_config.osc_options.get("targets", {}).items()
+        for target_name, target_options in targets:
+            self.osc_client.add_target(target_name, target_options)
+        return True
+
+    def setup_midi_communications(self) -> bool:
+        try:
+            self.midi_in = MIDIInterface(
+                app_logger=self.logger,
+                input_name=self.app_config.midi_options.get("control_port_name"),
+                queue_size_limit=self.app_config.midi_options.get("queue_size_limit")
+            ).midi_instance
+            self.midi_in.set_callback(self.midi_callback)
+            return True
+        except Exception:
+            return False
+
+    def keep_alive(self) -> None:
         try:
             self.exit_event.wait()
         except KeyboardInterrupt:
@@ -33,164 +71,37 @@ class AHMIDIProcessor:
         finally:
             self.midi_in.close_port()
 
-    def setup_logger(self):
-        """Configures logging for the application."""
-        StreamHandler(sys.stdout, level="DEBUG").push_application()
-        return Logger("")
-
-    @property
-    def TEMPLATES(self):
-        """Lazily loads the templates configuration when first accessed."""
-        if self._templates is None:
-            try:
-                self._templates = asyncio.run(read_json("templates.json", self.logger))
-            except Exception as e:
-                self.logger.error(f"Error loading templates.json: {e}")
-                sys.exit(1)
-        return self._templates
-
-    @property
-    def APP_CONFIG(self):
-        """Lazily loads the application configuration when first accessed."""
-        if self._app_config is None:
-            try:
-                self._app_config = asyncio.run(read_json("app_config.json", self.logger))
-                self.set_logging_parameters()
-            except Exception as e:
-                self.logger.error(f"Error loading app_config.json: {e}")
-                sys.exit(1)
-        return self._app_config
-
-    def set_logging_parameters(self):
-        """Sets application logging parameters from configuration."""
+    def midi_callback(self, message, data) -> None:
         try:
-            app_options = self.APP_CONFIG.get("app_options", {})
-            self.logger.level_name = app_options.get("log_level", "DEBUG")
-            self.logger.name = app_options.get("application_name", "")
-        except (KeyError, TypeError) as e:
-            self.logger.warning(f"Error setting logging parameters: {e}")
-
-    def validate_configurations(self):
-        """Ensures that required configurations are properly loaded."""
-        if not self.TEMPLATES or not self.APP_CONFIG:
-            self.logger.error("Configuration validation failed. Exiting...")
-            sys.exit(1)
-        self.OSC_OPTIONS = self.APP_CONFIG.get("osc_options", {})
-
-    def initialize_communication(self):
-        """Initializes MIDI and OSC communication."""
-        self.midi_in = self.setup_midi_communication()
-        self.osc_client = self.setup_osc_client()
-        self.midi_in.set_callback(self.midi_callback)
-
-    def setup_midi_communication(self):
-        """Sets up MIDI communication based on configuration."""
-        midi_options = self.APP_CONFIG.get("midi_options", {})
-        return open_communication(
-            control_input_name=midi_options.get("control_port_name", ""),
-            app_logger=self.logger,
-            queue_size_limit=midi_options.get("queue_size_limit", 100)
-        )
-
-    def setup_osc_client(self):
-        """Sets up an OSC client using configured targets."""
-        osc_client = OSCClient(app_logger=self.logger)
-        for target_name, target_options in self.OSC_OPTIONS.get("targets", {}).items():
-            osc_client.add_target(target_name, target_options)
-        return osc_client
-
-    def midi_callback(self, message, data=None):
-        """Callback function that processes an incoming MIDI message."""
-        msg_data, _ = message
-        for item in msg_data:
-            self.hex_message.extend([to_padded_hex(item)])
-
-        if self.is_complete_message(self.hex_message):
-            self.process_message(list(self.hex_message))
-            self.hex_message.clear()
-
-    def is_complete_message(self, message):
-        """Checks if a message has reached its expected length."""
-        expected_length = self.get_expected_length(message)
-        return expected_length is None or len(message) >= expected_length
-
-    def process_message(self, message):
-        """Processes an incoming MIDI message."""
-        if not message:
-            return
-        
-        dispatch = {
-            "0xf0": self.process_sysex_message,
+            processor = MIDIProcessor(
+                self.logger,
+                message=message,
+                data=data,
+                templates=self.templates
+            )
+            self.logger.info(f"Result: {processor.result}")
+            if isinstance(processor.result, list):
+                for item in processor.result:
+                    self.map_to_osc(item)
+            else:
+                raise TypeError("The handler result attribute must be a list of dictionaries")
+        except Exception:
+            self.logger.error("An exception was raised in the callback function.")
+            traceback.print_exc()
+    
+    def map_to_osc(self, result):
+        result_type = result["result_type"]
+        osc_path_templates = {
+            "channel_name": "/qu/channel/{{channel}}/name",
+            "console_fwversion": "/qu/console/fw-version",
+            "console_type": "/qu/console/type",
+            "function": "/qu/function/{{function}}",
+            "mmc_action": "/qu/mmc/{{action}}"
         }
-
-        message_type = message[0]
-        if message_type in dispatch:
-            dispatch[message_type](message)
-        elif len(message_type) > 2 and message_type[2] == "b":
-            self.process_nrpn_message(message)
-        else:
-            self.logger.debug(message)
-
-    def get_expected_length(self, message):
-        """Determines the expected length of a MIDI message."""
-        if not message:
-            return None
-        
-        try:
-            message_type = message[0][2]
-            length_info = self.TEMPLATES["message_types"].get(message_type, {}).get("length")
-
-            if isinstance(length_info, int):
-                return length_info
-            return int(self.TEMPLATES["message_types"][message_type]["subtype"].get(message[1][2:], None))
-        except KeyError:
-            return None
-
-    def process_sysex_message(self, message):
-        """Handles System Exclusive (SysEx) MIDI messages."""
-        sysex_header = self.TEMPLATES.get("sysex_templates", {}).get("sysex_header", [])
-
-        if message[:len(sysex_header)] == sysex_header:
-            payload = message[len(sysex_header):-1]
-            self.handle_sysex_payload(payload)
-        elif len(message) == 6 and message[1] == "0x7f":
-            self.handle_mmc_message(message)
-
-    def handle_sysex_payload(self, payload):
-        """Processes SysEx payload based on predefined mappings."""
-        action_map = {
-            "0x11": self.extract_console_info,
-            "0x02": self.extract_channel_info,
-            "0x14": lambda _: self.logger.info("Received end-of-sync message"),
-        }
-
-        action = action_map.get(payload[0], self.logger.debug)
-        result = action(payload)
-        if result:
-            self.logger.info(result)
-
-    def extract_console_info(self, data):
-        """Extracts console information from SysEx data."""
-        box_id, ver_maj, ver_min = data[1:]
-        console_type = self.TEMPLATES["console_types"].get(box_id, "unknown")
-        return {"type": console_type, "firmware": f"{int(ver_maj, 16)}.{int(ver_min, 16)}"}
-
-    def extract_channel_info(self, data):
-        """Extracts channel information from SysEx data."""
-        ch_number, ch_name_array = data[1], data[2:]
-        ch_name_str = "".join(bytearray.fromhex(item[2:]).decode() for item in ch_name_array).rstrip('\x00')
-        return f"{self.TEMPLATES['channel_definitions'].get(ch_number, 'Unknown')}, Name: '{ch_name_str}'"
-
-    def handle_mmc_message(self, data):
-        """Processes MMC (MIDI Machine Control) messages."""
-        action = data[4]
-        action_type = self.TEMPLATES["mmc_commands"].get(action, "Unknown MMC Command")
-        self.logger.info(f"MMC message received: {action_type}")
-        self.osc_client.send(f"/{action_type}")
-
-    def process_nrpn_message(self, message):
-        """Handles NRPN MIDI messages."""
-        self.logger.debug(message)
+        if result_type in osc_path_templates:
+            template = Template(osc_path_templates[result_type])
+            osc_path = template.render(result)
+            self.osc_client.send(osc_path, value=result["data"])
 
 
 if __name__ == "__main__":

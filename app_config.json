@@ -1,7 +1,7 @@
 {
     "app_options": {
         "application_name": "AHMIDIProcessor",
-        "log_level": "INFO"
+        "log_level": "DEBUG"
     },
     "midi_options": {
         "control_port_name": "MIDI Control 1",
@@ -15,10 +15,6 @@
         },
         "targets": {
             "target_0": {
-                "address": "127.0.0.1",
-                "port": 8000
-            },
-            "target_1": {
                 "address": "127.0.0.1",
                 "port": 8000
             }

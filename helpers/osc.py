@@ -40,7 +40,7 @@ class OSCClient:
         self.targets[target_name] = udp_client.SimpleUDPClient(address, port)
         self.app_logger.debug(f"Added OSC target '{target_name}' ({address}:{port}).")
 
-    def send(self, path: str, value: any = None):
+    def send(self, path: str, value: any = None) -> None:
         """Send an OSC message to all registered targets in parallel.
 
         Args:
@@ -70,3 +70,4 @@ class OSCClient:
         
         for future in futures:
             future.result()  # Ensures all messages are sent before returning
+        return

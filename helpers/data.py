@@ -14,7 +14,8 @@ class AppConfiguration:
         self.midi_options = self.raw_data["midi_options"]
         self.osc_options = self.raw_data["osc_options"]
     
-    def validate_config(self):
+    def validate_config(self) -> None:
+        # Not yet implemented
         pass
 
 

@@ -1,6 +1,6 @@
 from collections import deque
 
-def hexify(message_data: list) -> list:
+def hexify(message_data: list[int]) -> deque[str]:
     """Convert a list of decimal values to a list of hexadecimal values
 
     Args:

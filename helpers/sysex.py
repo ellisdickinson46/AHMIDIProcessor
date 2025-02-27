@@ -47,7 +47,7 @@ class SysExHandler:
 
 
 
-    def handle_action(self, action):
+    def handle_action(self, action) -> None:
         action_map = {
             "0x02": self.get_channel_name,
             "0x11": self.get_console_info,

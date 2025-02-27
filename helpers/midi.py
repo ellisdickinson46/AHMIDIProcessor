@@ -6,7 +6,7 @@ from helpers.sysex import SysExHandler
 from helpers.nrpn import NRPNHandler
 
 class MIDIInterface:
-    def __init__(self, app_logger: Logger, input_name, queue_size_limit: int = 1024,
+    def __init__(self, app_logger: Logger, input_name: str, queue_size_limit: int = 1024,
                  sysex_disable: bool = False):
         self.logger = app_logger
         self.input_name = input_name
@@ -57,7 +57,7 @@ class MIDIProcessor:
 
         self.process()
 
-    def process(self):
+    def process(self) -> None:
         message_type = self.message[0]
         dispatch_map = {
             "0xf0": SysExHandler,

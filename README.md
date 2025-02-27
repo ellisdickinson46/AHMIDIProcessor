@@ -20,7 +20,7 @@ AHMIDIProcessor is a Python-based MIDI processing tool designed for interfacing 
 ## Installation
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.10+
 - A supported MIDI device (Allen & Heath Qu Mixing Console)
 - Required Python dependencies
 

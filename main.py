@@ -127,7 +127,7 @@ class AHMIDIProcessor:
             self.logger.error("An exception was raised in the callback function.")
             traceback.print_exc()
 
-    def is_complete_midi_message(self, message) -> bool:
+    def is_complete_midi_message(self, message: deque[str]) -> bool:
         """Determines the expected length of a MIDI message."""
         if not message:
             return None
@@ -136,20 +136,21 @@ class AHMIDIProcessor:
             return True
         return False
     
-    def get_expected_length(self, message):
+    def get_expected_length(self, message: deque[str]) -> int | None:
         """Determines the expected length of a MIDI message."""
         if not message:
             return None
 
         message_type = message[0][2]
         length_info = self.templates.message_types.get(message_type, {}).get("length")
-
         if isinstance(length_info, int):
             return length_info
-
-        return int(self.templates.message_types[message_type]["subtype"].get(message[1][2:], None))
+        length_info = self.templates.message_types[message_type]["subtype"].get(message[1][2:])
+        if isinstance(length_info, int):
+            return length_info
+        return None
     
-    def map_to_osc(self, result):
+    def map_to_osc(self, result) -> None:
         result_type = result.get("result_type", "")
         osc_path_templates = {
             "channel_name": "/qu/channel/{{channel}}/name",

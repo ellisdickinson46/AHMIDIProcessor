@@ -6,21 +6,45 @@ class SysExHandler:
         self.message = message
         self.template_data = templates
         self.result: list[dict[str, any]] = [{}] # Placeholder
+        
+        self.logger.debug(f"SysEx Handler -> {message}")
 
         self.action, self.msg_data = self.split_message(self.message)
-        self.handle_action(self.action)
+        if self.action and self.msg_data:
+            self.handle_action(self.action)
 
     def split_message(self, message):
-        sysex_header = self.template_data.sysex_templates["sysex_header"]
-        if message[:len(sysex_header)] == sysex_header:
-            return [
-                message[len(sysex_header):-1][0],
-                message[len(sysex_header):-1][1:]
-            ]
-        return [
-            message[1],
-            message[2:-1]
-        ]
+        """
+        Extracts the action and data from a SysEx message.
+
+        Args:
+            message (list): The full SysEx message as a list of hex values.
+
+        Returns:
+            tuple: (action, data) extracted from the message.
+        """
+        if not message or len(message) < 3:
+            self.logger.error("Invalid SysEx message: Too short")
+            return None, None
+
+        sysex_header = self.template_data.sysex_templates.get("sysex_header", [])
+        header_len = len(sysex_header)
+
+        if message[:header_len] == sysex_header:
+            # Message contains a valid header
+            extracted_data = message[header_len:-1]  # Strip header and end byte
+        else:
+            # Assume message has no specific header
+            extracted_data = message[1:-1]  # Strip start and end byte
+
+        if not extracted_data:
+            self.logger.error("SysEx message missing expected data.")
+            return None, None
+
+        action, msg_data = extracted_data[0], extracted_data[1:]
+
+        return action, msg_data
+
 
 
     def handle_action(self, action):

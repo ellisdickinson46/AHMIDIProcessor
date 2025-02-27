@@ -6,4 +6,5 @@ class NRPNHandler:
         self.message = message
         self.template_data = templates
         self.result: list[dict[str, any]] = [{}] # Placeholder
-        print("NRPN Handler", message)
+        
+        self.logger.debug(f"NRPN Handler  -> {message}")

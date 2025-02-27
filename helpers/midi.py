@@ -1,6 +1,7 @@
 import rtmidi
 
 from logbook import Logger
+from helpers.cc import ControlChangeHandler
 from helpers.sysex import SysExHandler
 from helpers.nrpn import NRPNHandler
 
@@ -60,7 +61,8 @@ class MIDIProcessor:
         message_type = self.message[0]
         dispatch_map = {
             "0xf0": SysExHandler,
-            "0xb": NRPNHandler
+            "0xb": NRPNHandler,
+            "0x9": ControlChangeHandler
         }
         if message_type in dispatch_map:
             self.result = dispatch_map[message_type](
@@ -75,4 +77,4 @@ class MIDIProcessor:
                 self.templates
             ).result
         else:
-            print("Message Type not implemented yet")
+            self.logger.warning(f"Message type not implemented -> {message_type}")

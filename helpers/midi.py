@@ -1,7 +1,6 @@
 import rtmidi
 
 from logbook import Logger
-from helpers.hex import hexify
 from helpers.sysex import SysExHandler
 from helpers.nrpn import NRPNHandler
 

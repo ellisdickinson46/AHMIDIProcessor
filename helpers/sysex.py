@@ -5,7 +5,7 @@ class SysExHandler:
         self.logger = logger
         self.message = message
         self.template_data = templates
-        self.result = {} # Placeholder
+        self.result: list[dict[str, any]] = [{}] # Placeholder
 
         self.action, self.msg_data = self.split_message(self.message)
         self.handle_action(self.action)

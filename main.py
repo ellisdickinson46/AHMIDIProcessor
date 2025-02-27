@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import threading
 import traceback
@@ -15,6 +16,7 @@ from helpers.midi import MIDIInterface, MIDIProcessor
 class AHMIDIProcessor:
     def __init__(self):
         self.logger = self.initialize_logger()
+        self.logger.info("Loading app configuration and templates...")
         self.app_config = AppConfiguration(logger=self.logger)
         self.templates = MessageTemplates(logger=self.logger)
         self.set_logging_parameters()
@@ -25,9 +27,10 @@ class AHMIDIProcessor:
         self.osc_ok = self.setup_osc_client()
         if self.midi_ok and self.osc_ok:
             self.logger.info("Initialization complete, entering ready state. Press Control-C to exit")
-            self.keep_alive()
+            asyncio.run(self.keep_alive())  # Runs the event loop
         else:
-            self.logger.error("Initialization failed, Exiting...")
+            self.logger.error("Initialization failed, cannot enter ready state. Exiting...")
+            self.cleanup()
 
     def initialize_logger(self) -> Logger:
         log_template = """[{{ record.time }}] {{ record.level_name.rjust(8) }} [{{ record.channel }}]: {{ record.message }}"""
@@ -46,6 +49,7 @@ class AHMIDIProcessor:
         self.logger.level_name = self.app_config.app_options.get("log_level", "DEBUG")
 
     def setup_osc_client(self) -> bool:
+        self.logger.info("Setting up OSC Communication...")
         self.osc_client = OSCClient(app_logger=self.logger)
         targets = self.app_config.osc_options.get("targets", {}).items()
         for target_name, target_options in targets:
@@ -53,6 +57,7 @@ class AHMIDIProcessor:
         return True
 
     def setup_midi_communications(self) -> bool:
+        self.logger.info("Setting up MIDI Communication...")
         try:
             self.midi_in = MIDIInterface(
                 app_logger=self.logger,
@@ -65,16 +70,22 @@ class AHMIDIProcessor:
         except Exception:
             return False
 
-    def keep_alive(self) -> None:
+    async def keep_alive(self) -> None:
         try:
-            self.exit_event.wait()
-        except KeyboardInterrupt:
+            while not self.exit_event.is_set():
+                await asyncio.sleep(0.1)  # Prevents blocking execution
+        except asyncio.CancelledError:
             print("\b\b", end="")
             self.exit_event.set()
             self.logger.info("Keyboard interrupt received. Exiting...")
         finally:
+            self.cleanup()
+
+    def cleanup(self) -> None:
+        """Handles cleanup before exiting."""
+        self.logger.info("Cleaning up resources...")
+        if hasattr(self, "midi_in") and self.midi_in:
             self.midi_in.close_port()
-            sys.exit(1)
 
     def midi_callback(self, message: tuple, data) -> None:
         msg_bytes, _ = message
@@ -154,4 +165,4 @@ class AHMIDIProcessor:
 
 
 if __name__ == "__main__":
-    AHMIDIProcessor()
+    ahmidiprocessor = AHMIDIProcessor()

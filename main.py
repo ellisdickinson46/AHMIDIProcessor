@@ -1,10 +1,12 @@
 import sys
 import threading
 import traceback
+from collections import deque
 
 from jinja2 import Template
 from logbook import Logger, StreamHandler
 from logbook.more import JinjaFormatter
+from helpers.hex import hexify
 from helpers.data import AppConfiguration, MessageTemplates
 from helpers.osc import OSCClient
 from helpers.midi import MIDIInterface, MIDIProcessor
@@ -16,6 +18,7 @@ class AHMIDIProcessor:
         self.app_config = AppConfiguration(logger=self.logger)
         self.templates = MessageTemplates(logger=self.logger)
         self.set_logging_parameters()
+        self.msg_store = deque(maxlen=128)
 
         self.exit_event = threading.Event()
         self.midi_ok = self.setup_midi_communications()
@@ -54,7 +57,8 @@ class AHMIDIProcessor:
             self.midi_in = MIDIInterface(
                 app_logger=self.logger,
                 input_name=self.app_config.midi_options.get("control_port_name"),
-                queue_size_limit=self.app_config.midi_options.get("queue_size_limit")
+                queue_size_limit=self.app_config.midi_options.get("queue_size_limit"),
+                sysex_disable=False
             ).midi_instance
             self.midi_in.set_callback(self.midi_callback)
             return True
@@ -70,27 +74,72 @@ class AHMIDIProcessor:
             self.logger.info("Keyboard interrupt received. Exiting...")
         finally:
             self.midi_in.close_port()
+            sys.exit(1)
 
-    def midi_callback(self, message, data) -> None:
+    def midi_callback(self, message: tuple, data) -> None:
+        msg_bytes, _ = message
+        
         try:
-            processor = MIDIProcessor(
-                self.logger,
-                message=message,
-                data=data,
-                templates=self.templates
-            )
+            if len(msg_bytes) > 3:
+                # Handle all messages that don't require the queue immediately
+                processor = MIDIProcessor(
+                    self.logger,
+                    message=hexify(msg_bytes),
+                    data=data,
+                    templates=self.templates
+                )
+                used_store = False
+            else:
+                # Handle messages that require the queue only when all bytes are received
+                self.msg_store.extend(hexify(msg_bytes))
+                if not self.is_complete_midi_message(self.msg_store):
+                    return
+                
+                processor = MIDIProcessor(
+                    self.logger,
+                    message=self.msg_store,
+                    data=data,
+                    templates=self.templates
+                )
+                used_store = True
+
             self.logger.info(f"Result: {processor.result}")
             if isinstance(processor.result, list):
                 for item in processor.result:
                     self.map_to_osc(item)
             else:
-                raise TypeError("The handler result attribute must be a list of dictionaries")
+                self.logger.error("The handler result attribute must be a list of dictionaries, OSC cannot be sent")
+            
+            if used_store:
+                self.msg_store.clear()
         except Exception:
             self.logger.error("An exception was raised in the callback function.")
             traceback.print_exc()
+
+    def is_complete_midi_message(self, message) -> bool:
+        """Determines the expected length of a MIDI message."""
+        if not message:
+            return None
+        expected_length = self.get_expected_length(message)
+        if expected_length == 0 or len(message) == expected_length:
+            return True
+        return False
+    
+    def get_expected_length(self, message):
+        """Determines the expected length of a MIDI message."""
+        if not message:
+            return None
+
+        message_type = message[0][2]
+        length_info = self.templates.message_types.get(message_type, {}).get("length")
+
+        if isinstance(length_info, int):
+            return length_info
+
+        return int(self.templates.message_types[message_type]["subtype"].get(message[1][2:], None))
     
     def map_to_osc(self, result):
-        result_type = result["result_type"]
+        result_type = result.get("result_type", "")
         osc_path_templates = {
             "channel_name": "/qu/channel/{{channel}}/name",
             "console_fwversion": "/qu/console/fw-version",

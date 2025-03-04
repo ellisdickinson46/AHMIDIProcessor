@@ -32,3 +32,4 @@ class MessageTemplates:
         self.console_types = self.raw_data["console_types"]
         self.mmc_commands = self.raw_data["mmc_commands"]
         self.channel_definitions = self.raw_data["channel_definitions"]
+        self.mix_pan_definitions = self.raw_data["mix_pan_definitions"]

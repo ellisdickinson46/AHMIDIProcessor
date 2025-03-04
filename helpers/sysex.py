@@ -86,6 +86,12 @@ class SysExHandler:
     def get_meter_data(self):
         print("Get Meter Data")
 
+
+
+
+
+        
+
     def handle_end_of_sync(self):
         self.result = [{
             "result_type": "function",

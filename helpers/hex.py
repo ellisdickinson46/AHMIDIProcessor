@@ -9,7 +9,7 @@ def hexify(message_data: list[int]) -> deque[str]:
     Returns:
         list: A hexadecimal-formatted message
     """
-    hex_message = deque(maxlen=128)
+    hex_message = deque(maxlen=15000)
     for item in message_data:
         hex_message.extend([to_padded_hex(item)])
     return hex_message

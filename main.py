@@ -20,7 +20,7 @@ class AHMIDIProcessor:
         self.app_config = AppConfiguration(logger=self.logger)
         self.templates = MessageTemplates(logger=self.logger)
         self.set_logging_parameters()
-        self.msg_store = deque(maxlen=128)
+        self.msg_store = deque(maxlen=15000)
 
         self.exit_event = threading.Event()
         self.midi_ok = self.setup_midi_communications()
@@ -86,33 +86,27 @@ class AHMIDIProcessor:
         self.logger.info("Cleaning up resources...")
         if hasattr(self, "midi_in") and self.midi_in:
             self.midi_in.close_port()
+            self.midi_in.delete()
 
     def midi_callback(self, message: tuple, data) -> None:
         msg_bytes, _ = message
+        msg_bytes = hexify(msg_bytes)
+        self.msg_store.extend(msg_bytes)
+        preserve_store = True
+        
+        # print(self.msg_store)
         
         try:
-            if len(msg_bytes) > 3:
-                # Handle all messages that don't require the queue immediately
-                processor = MIDIProcessor(
-                    self.logger,
-                    message=hexify(msg_bytes),
-                    data=data,
-                    templates=self.templates
-                )
-                used_store = False
-            else:
-                # Handle messages that require the queue only when all bytes are received
-                self.msg_store.extend(hexify(msg_bytes))
-                if not self.is_complete_midi_message(self.msg_store):
-                    return
-                
-                processor = MIDIProcessor(
-                    self.logger,
-                    message=self.msg_store,
-                    data=data,
-                    templates=self.templates
-                )
-                used_store = True
+            if not self.is_complete_midi_message(self.msg_store):
+                return
+            
+            processor = MIDIProcessor(
+                self.logger,
+                message=self.msg_store,
+                data=data,
+                templates=self.templates
+            )
+            preserve_store = False
 
             self.logger.info(f"Result: {processor.result}")
             if isinstance(processor.result, list):
@@ -121,7 +115,7 @@ class AHMIDIProcessor:
             else:
                 self.logger.error("The handler result attribute must be a list of dictionaries, OSC cannot be sent")
             
-            if used_store:
+            if not preserve_store:
                 self.msg_store.clear()
         except Exception:
             self.logger.error("An exception was raised in the callback function.")
@@ -131,8 +125,13 @@ class AHMIDIProcessor:
         """Determines the expected length of a MIDI message."""
         if not message:
             return None
+        if message[0] == "0xf0":
+            # print(message[0])
+            if message[-1] == "0xf7":
+                return True
+            return False
         expected_length = self.get_expected_length(message)
-        if expected_length == 0 or len(message) == expected_length:
+        if len(message) == expected_length:
             return True
         return False
     
@@ -154,6 +153,11 @@ class AHMIDIProcessor:
         result_type = result.get("result_type", "")
         osc_path_templates = {
             "channel_name": "/qu/channel/{{channel}}/name",
+            "channel_fader": "/qu/channel/{{channel}}/fader",
+            "channel_pan": "/qu/channel/{{channel}}/pan",
+            "ch_preamp_source": "/qu/channel/{{channel}}/preamp-source",
+            "ch_usb_source": "/qu/channel/{{channel}}/usb-source",
+            "pafl_select": "/qu/channel/{{channel}}/pafl-select",
             "console_fwversion": "/qu/console/fw-version",
             "console_type": "/qu/console/type",
             "function": "/qu/function/{{function}}",

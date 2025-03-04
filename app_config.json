@@ -4,14 +4,18 @@
         "log_level": "DEBUG"
     },
     "midi_options": {
-        "control_port_name": "MIDI Control 1",
+        "control_port_name": "MIDI Control 1 0",
         "midi_in_name": "Allen and Heath Processor",
         "queue_size_limit": 10240
     },
     "osc_options": {
         "listen": {
-            "address": "0.0.0.0",
-            "port": 8080
+            "svc_port": 8080,
+            "svc_name": "AHMIDIProcessor OSC",
+            "svc_addr": "ahmidi.local",
+            "svc_type": "_osc._udp.local.",
+            "svc_props": {},
+            "svc_ipver": "v4"
         },
         "targets": {
             "target_0": {

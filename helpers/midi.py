@@ -45,7 +45,7 @@ class MIDIInterface:
             self.logger.info(f"Opened MIDI port -> '{self.input_name}'")
         except Exception as e:
             self.logger.error(f"Failed to open MIDI port '{self.input_name}': {e}")
-            raise ConnectionError
+            raise ConnectionError from e
 
 
 class MIDIProcessor:

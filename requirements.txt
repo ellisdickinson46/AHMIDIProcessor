@@ -1,3 +1,7 @@
+aiofiles==24.1.0
+Jinja2==3.1.5
 Logbook==1.8.0
+psutil==7.0.0
 python-osc==1.9.3
 python-rtmidi==1.5.8
+zeroconf==0.145.1

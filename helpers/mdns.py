@@ -1,9 +1,9 @@
 import asyncio
 import threading
-import socket
 
 from logbook import Logger
 from zeroconf import IPVersion, ServiceInfo, Zeroconf
+from helpers.ip_fetcher import IPFetcher
 
 
 class ZeroConfService:
@@ -20,6 +20,8 @@ class ZeroConfService:
             svc_ipver     (str): IP Version to use for the Zeroconf Service
         """
         self.logger = app_logger
+        self.ip_addresses = IPFetcher().get_raw_ips()
+
         self.svc_port = svc_port
         self.svc_name = svc_name
         self.svc_addr = svc_addr
@@ -31,6 +33,7 @@ class ZeroConfService:
             raise ValueError(f"Invalid IP version: {self.svc_ipver}")
 
         self.zeroconf = Zeroconf(ip_version=self.svc_ipver)
+        self.register_service()
 
         self.exit_event = threading.Event()
         self.thread = threading.Thread(target=self.run_service_worker, daemon=True)
@@ -60,7 +63,6 @@ class ZeroConfService:
 
     async def service_worker(self) -> None:
         """Async service worker that registers the service and keeps it alive"""
-        self.register_service()
         try:
             while not self.exit_event.is_set():
                 await asyncio.sleep(0.1)
@@ -73,7 +75,7 @@ class ZeroConfService:
         self.svc_info = ServiceInfo(
             self.svc_type,
             f"{self.svc_name}.{self.svc_type}",
-            addresses=[socket.inet_aton("127.0.0.1")],
+            addresses=self.ip_addresses,
             port=self.svc_port,
             properties=self.svc_props,
             server=self.svc_addr,
@@ -82,6 +84,6 @@ class ZeroConfService:
 
     def unregister_service(self) -> None:
         """Unregister and close the Zeroconf service"""
-        self.logger.debug("Unregistering zeroconf ervice...")
+        self.logger.debug("Unregistering zeroconf service...")
         self.zeroconf.unregister_service(self.svc_info)
         self.zeroconf.close()

@@ -10,6 +10,7 @@ from logbook.more import JinjaFormatter
 from helpers.hex import hexify
 from helpers.data import AppConfiguration, MessageTemplates
 from helpers.osc import OSCClient
+from helpers.mdns import ZeroConfService
 from helpers.midi import MIDIInterface, MIDIProcessor
 
 
@@ -25,6 +26,7 @@ class AHMIDIProcessor:
         self.exit_event = threading.Event()
         self.midi_ok = self.setup_midi_communications()
         self.osc_ok = self.setup_osc_client()
+        self.mdns_ok = self.setup_service_registration()
         if self.midi_ok and self.osc_ok:
             self.logger.info("Initialization complete, entering ready state. Press Control-C to exit")
             asyncio.run(self.keep_alive())  # Runs the event loop
@@ -70,6 +72,20 @@ class AHMIDIProcessor:
         except Exception:
             return False
 
+    def setup_service_registration(self):
+        self.logger.info("Registering applicaiton for service discovery...")
+        listen_options = self.app_config.osc_options.get("listen")
+        self.mdns_service = ZeroConfService(
+            app_logger=self.logger,
+            svc_port=listen_options.get("svc_port"),
+            svc_name=listen_options.get("svc_name"),
+            svc_addr=listen_options.get("svc_addr"),
+            svc_type=listen_options.get("svc_type"),
+            svc_props=listen_options.get("svc_props"),
+            svc_ipver=listen_options.get("svc_ipver")
+        )
+        return False
+
     async def keep_alive(self) -> None:
         try:
             while not self.exit_event.is_set():
@@ -87,6 +103,9 @@ class AHMIDIProcessor:
         if hasattr(self, "midi_in") and self.midi_in:
             self.midi_in.close_port()
             self.midi_in.delete()
+        if hasattr(self, "mdns_service"):
+            print("exit")
+            self.mdns_service.exit_event.set()
 
     def midi_callback(self, message: tuple, data) -> None:
         msg_bytes, _ = message
@@ -154,7 +173,7 @@ class AHMIDIProcessor:
         osc_path_templates = {
             "channel_name": "/qu/channel/{{channel}}/name",
             "channel_fader": "/qu/channel/{{channel}}/fader",
-            "channel_pan": "/qu/channel/{{channel}}/pan",
+            "channel_pan": "/qu/channel/{{channel}}/pan/{{mix}}",
             "ch_preamp_source": "/qu/channel/{{channel}}/preamp-source",
             "ch_usb_source": "/qu/channel/{{channel}}/usb-source",
             "pafl_select": "/qu/channel/{{channel}}/pafl-select",

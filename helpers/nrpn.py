@@ -32,9 +32,11 @@ class NRPNHandler:
     def get_pan_position(self):
         ch_number = self.message[2]
         pan_position = int(self.message[8], 16) - 37
+        mix = self.message[11]
         self.result = [{
             "result_type": "channel_pan",
             "channel": self.template_data.channel_definitions.get(ch_number, "Unknown"),
+            "mix": self.template_data.mix_pan_definitions.get(mix, "Unknown"),
             "data": pan_position
         }]
     

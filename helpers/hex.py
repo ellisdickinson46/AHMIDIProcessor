@@ -5,7 +5,7 @@ def hexify(message_data: list[int]) -> deque[str]:
 
     Args:
         message_data (list): The decimal-formatted message to convert each index in the list
-                                should be one byte of data
+                             should be one byte of data
     Returns:
         list: A hexadecimal-formatted message
     """

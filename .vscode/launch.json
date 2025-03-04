@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Launch Application",
+            "preLaunchTask": "Clear terminal",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "redirectOutput": true,
+            "internalConsoleOptions": "openOnFirstSessionStart"
+        }
+    ]
+}

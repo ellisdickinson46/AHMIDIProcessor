@@ -12,11 +12,16 @@ class OSCClient:
         Args:
             app_logger (Logger): Logger instance for debugging and error reporting.
         """
-        self.app_logger = app_logger
+        self.logger = app_logger
         self.targets: dict[str, udp_client.SimpleUDPClient] = {}
         self.executor = ThreadPoolExecutor(max_workers=5)  # Limit to 5 concurrent threads
 
-    def add_target(self, target_name: str, target_options: dict[str, any]):
+    def add_targets(self, targets: list[dict[str, any]]):
+        self.logger.debug("Adding OSC targets...")
+        for target_name, target_options in targets:
+            self._add_target(target_name, target_options)
+
+    def _add_target(self, target_name: str, target_options: dict[str, any]):
         """Register a new OSC target with its address and port.
 
         Args:
@@ -35,10 +40,10 @@ class OSCClient:
             raise ValueError(f"Invalid address '{address}' or port '{port}' for target '{target_name}'.")
 
         if target_name in self.targets:
-            self.app_logger.warning(f"Target '{target_name}' is already registered. Overwriting.")
+            self.logger.warning(f"Target '{target_name}' is already registered. Overwriting...")
 
         self.targets[target_name] = udp_client.SimpleUDPClient(address, port)
-        self.app_logger.debug(f"Added OSC target '{target_name}' ({address}:{port}).")
+        self.logger.debug(f" --> Added OSC target: '{target_name}' ({address}:{port})")
 
     def send(self, path: str, value: any = None) -> None:
         """Send an OSC message to all registered targets in parallel.
@@ -55,16 +60,16 @@ class OSCClient:
             raise ValueError(f"Invalid OSC path: '{path}'. Must be a string starting with '/'.")
 
         if not self.targets:
-            self.app_logger.warning("No OSC targets registered. Message not sent.")
+            self.logger.warning("No OSC targets registered. Message not sent.")
             return
 
         def send_message(target_name: str, client: udp_client.SimpleUDPClient):
             """Send message to a specific target."""
             try:
                 client.send_message(path, value)
-                self.app_logger.debug(f"Sent to '{target_name}' - Path: {path}, Value: {value}")
+                self.logger.debug(f"Sent to '{target_name}' - Path: {path}, Value: {value}")
             except Exception as e:
-                self.app_logger.error(f"Error sending to '{target_name}': {e}")
+                self.logger.error(f"Error sending to '{target_name}': {e}")
 
         futures = [self.executor.submit(send_message, name, client) for name, client in self.targets.items()]
         

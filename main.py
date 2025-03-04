@@ -27,7 +27,7 @@ class AHMIDIProcessor:
         self.midi_ok = self.setup_midi_communications()
         self.osc_ok = self.setup_osc_client()
         self.mdns_ok = self.setup_service_registration()
-        if self.midi_ok and self.osc_ok:
+        if self.midi_ok and self.osc_ok and self.mdns_ok:
             self.logger.info("Initialization complete, entering ready state. Press Control-C to exit")
             asyncio.run(self.keep_alive())  # Runs the event loop
         else:
@@ -52,11 +52,15 @@ class AHMIDIProcessor:
 
     def setup_osc_client(self) -> bool:
         self.logger.info("Setting up OSC Communication...")
-        self.osc_client = OSCClient(app_logger=self.logger)
-        targets = self.app_config.osc_options.get("targets", {}).items()
-        for target_name, target_options in targets:
-            self.osc_client.add_target(target_name, target_options)
-        return True
+        try:
+            targets = self.app_config.osc_options.get("targets", {}).items()
+
+            self.osc_client = OSCClient(app_logger=self.logger)
+            self.osc_client.add_targets(targets)
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to setup OSC Communication -> {e}")
+            return False
 
     def setup_midi_communications(self) -> bool:
         self.logger.info("Setting up MIDI Communication...")
@@ -69,22 +73,27 @@ class AHMIDIProcessor:
             ).midi_instance
             self.midi_in.set_callback(self.midi_callback)
             return True
-        except Exception:
+        except Exception as e:
+            self.logger.error(f"Failed to setup MIDI Communication -> {e}")
             return False
 
     def setup_service_registration(self):
         self.logger.info("Registering applicaiton for service discovery...")
         listen_options = self.app_config.osc_options.get("listen")
-        self.mdns_service = ZeroConfService(
-            app_logger=self.logger,
-            svc_port=listen_options.get("svc_port"),
-            svc_name=listen_options.get("svc_name"),
-            svc_addr=listen_options.get("svc_addr"),
-            svc_type=listen_options.get("svc_type"),
-            svc_props=listen_options.get("svc_props"),
-            svc_ipver=listen_options.get("svc_ipver")
-        )
-        return False
+        try:
+            self.mdns_service = ZeroConfService(
+                app_logger=self.logger,
+                svc_port=listen_options.get("svc_port"),
+                svc_name=listen_options.get("svc_name"),
+                svc_addr=listen_options.get("svc_addr"),
+                svc_type=listen_options.get("svc_type"),
+                svc_props=listen_options.get("svc_props"),
+                svc_ipver=listen_options.get("svc_ipver")
+            )
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to register application for service discovery -> {e}")
+            return False
 
     async def keep_alive(self) -> None:
         try:
@@ -104,7 +113,6 @@ class AHMIDIProcessor:
             self.midi_in.close_port()
             self.midi_in.delete()
         if hasattr(self, "mdns_service"):
-            print("exit")
             self.mdns_service.exit_event.set()
 
     def midi_callback(self, message: tuple, data) -> None:

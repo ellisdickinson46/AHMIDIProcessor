@@ -133,5 +133,24 @@
         "0x6b": "group-7_8",
         "0x6c": "matrix-1_2",
         "0x6d": "matrix-3_4"
+    },
+    "meter_definitions": {
+        
+    },
+    "mix_pan_definitions": {
+        "0x00": "",
+        "0x01": "",
+        "0x02": "",
+        "0x03": "",
+        "0x04": "mix-5_6",
+        "0x05": "mix-7_8",
+        "0x06": "mix-9_10",
+        "0x07": "mix-l_r",
+        "0x08": "group-1_2",
+        "0x09": "group-3_4",
+        "0x0a": "group-5_6",
+        "0x0b": "group-7_8",
+        "0x0c": "matrix-1_2",
+        "0x0d": "matrix-3_4"
     }
 }
